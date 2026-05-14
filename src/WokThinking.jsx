@@ -860,122 +860,155 @@ export default function WokThinking() {
 
   const currentLang = LANGUAGES.find(l=>l.code===lang)||LANGUAGES[0];
 
-  // Key translatable strings organized by section
-  const PAGE_STRINGS = {
-    cover: [
-      {id:"cover-sub", text:"APAC Kitchen Science, Systems Design and High-Speed Cooking"},
-      {id:"stat-1", text:"APAC Recipes"},{id:"stat-2", text:"Frameworks"},
-      {id:"stat-3", text:"Markets"},{id:"stat-4", text:"Science"},
-      {id:"cover-disc", text:"An independent publication by Jimmy Mun in a personal capacity. Not affiliated with, sponsored by, or produced on behalf of any equipment manufacturer or employer. Original culinary findings including steam cavity microwave interference (Ref: JMUN-IP-001-2026) are the intellectual property of the author. All prices, costs and financial figures appearing in this publication are indicative estimates only and subject to change."},
-    ],
-    phrase: [
-      {id:"phrase-1", text:"Seeing is believing."},
-      {id:"phrase-2", text:"Seeing is not enough."},
-      {id:"phrase-3", text:"We must model it."},
-      {id:"mentor-role", text:"Mentor — Agile · Systems · Design · Creative Thinking"},
-      {id:"btn-continue", text:"Continue →"},
-    ],
-    ack: [
-      {id:"ack-title", text:"On the Shoulders of Others."},
-      {id:"ack-intro", text:"No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward."},
-      {id:"ack-daniel-note", text:"The phrase that anchors this entire book — 'Seeing is believing. Seeing is not enough. We must model it.' — came from a conversation with Daniel that changed how I see everything. His teaching gave me the framework to understand what I had been practising intuitively for years. The intellectual architecture of Part II of this book is built on his foundation."},
-      {id:"ack-kitchens", text:"To every chef who let me into their kitchen, every operator who pushed back on a profile setting, every student who asked a question I couldn't immediately answer — you shaped this book more than any textbook could."},
-      {id:"ack-title", text:"On the Shoulders of Others."},
-      {id:"ack-title-em", text:"Shoulders"},
-      {id:"ack-title-2", text:" of Others."},
-    ],
-    preface: [
-      {id:"pre-title", text:"From Demo to Model."},
-      {id:"pre-p1", text:"For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it."},
-      {id:"pre-p2", text:"But seeing was never enough — not for me, and eventually not for the operators I was trying to help. They could watch the demo. They could taste the result. And then they'd go back to their kitchens and the knowledge would stop there, because nobody had given them the model behind what they saw."},
-      {id:"pre-p3", text:"That gap — between observation and understanding — is what this book exists to close."},
-      {id:"pre-moment", text:"I was sitting in a session with Daniel Theyagu when he said it: 'Seeing is believing. Seeing is not enough. We must model it.' I had been running food demonstrations across fifteen APAC markets for years. But I had never heard anyone name what was missing on the other side of that moment. Daniel named it. You must model it."},
-    ],
-    intro: [
-      {id:"intro-title", text:"Why APAC Needs a Different Kind of Kitchen Thinking."},
-      {id:"intro-p1", text:"The cookbooks available to APAC culinary students today were mostly written in the West, rooted in French classical technique, designed for kitchens built on infrastructure that much of Asia doesn't have and doesn't need."},
-      {id:"intro-p2", text:"The business books available to APAC food entrepreneurs treat the kitchen as a black box — inputs and outputs, cost and margin, but nothing about what happens in between and why it matters."},
-      {id:"intro-p3", text:"The equipment manuals tell you what buttons to press. They do not tell you why those buttons work, what happens at the molecular level when you press them, or how the decision to press them connects to every other decision in your operation."},
-    ],
+  // DOM-level translation: translate all visible text nodes after render
+  const applyDOMTranslation = (langCode, pageKey) => {
+    if(langCode === "en") return;
+    const storeKey = `${langCode}_${pageKey}`;
+    const pageMap = tStore[storeKey];
+    if(!pageMap) return;
+
+    // Walk all text nodes in active page
+    const pageEl = document.querySelector('.pg.on');
+    if(!pageEl) return;
+
+    const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const txt = node.textContent.trim();
+        if(txt.length < 3) return NodeFilter.FILTER_REJECT;
+        const tag = node.parentElement?.tagName;
+        if(['SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node => {
+      const orig = node.textContent.trim();
+      if(pageMap[orig]) node.textContent = node.textContent.replace(orig, pageMap[orig]);
+    });
   };
 
+  // Fetch translation for entire page
   const translatePage = async (targetLang) => {
     if(targetLang === "en") { setLang("en"); setShowLangMenu(false); return; }
     setShowLangMenu(false);
-    setTranslating(true);
     setLang(targetLang);
+    const storeKey = `${targetLang}_${ch}`;
+    if(tStore[storeKey]) return; // already translated
 
-    // Get strings for current page + phrase page (always needed)
-    const pagesToTranslate = [ch, "phrase", "cover"];
-    const stringsToTranslate = [];
+    setTranslating(true);
+    setTError("");
 
-    pagesToTranslate.forEach(pageId => {
-      const pageStrings = PAGE_STRINGS[pageId] || [];
-      pageStrings.forEach(s => {
-        const key = `${targetLang}_${s.id}`;
-        if(!tStore[key]) stringsToTranslate.push({...s, key});
-      });
+    // Wait for render then collect text
+    await new Promise(r => setTimeout(r, 150));
+    const pageEl = document.querySelector('.pg.on');
+    if(!pageEl) { setTranslating(false); return; }
+
+    // Collect unique meaningful text strings
+    const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const txt = node.textContent.trim();
+        if(txt.length < 4) return NodeFilter.FILTER_REJECT;
+        const tag = node.parentElement?.tagName;
+        if(['SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
     });
 
-    if(stringsToTranslate.length === 0) { setTranslating(false); return; }
+    const seen = new Set();
+    const texts = [];
+    while(walker.nextNode()) {
+      const txt = walker.currentNode.textContent.trim();
+      if(!seen.has(txt) && txt.length >= 4) {
+        seen.add(txt);
+        texts.push(txt);
+      }
+    }
 
-    // Build one batch translation request
-    const preserveList = PRESERVE_TERMS.join(", ");
+    if(texts.length === 0) { setTranslating(false); return; }
+
+    const preserveList = [
+      "Merrychef","conneX12e","conneX12 SP","conneX12 HP","conneX16",
+      "Maillard","impingement","magnetron","pyrolysis","HACCP","FIFO",
+      "Char Siu","Laksa","Hokkien Mee","Gyoza","Bulgogi","Naan",
+      "KitchenConnect","JMUN-IP-001-2026","NAFEM","CFSP","SCAMPER",
+      "Daniel Theyagu","Jimmy Mun","Fan 100%","MW 0%","MW 100%"
+    ].join(", ");
+
     const langName = LANGUAGES.find(l=>l.code===targetLang)?.label || targetLang;
-    const numbered = stringsToTranslate.map((s,i)=>`[${i+1}] ${s.text}`).join("\n");
 
+    // Split into batches of 30 to stay within token limits
+    const BATCH = 30;
+    const pageMap = {};
 
-    const prompt = `Translate each numbered item from English to ${langName}.
+    for(let b = 0; b < texts.length; b += BATCH) {
+      const batch = texts.slice(b, b + BATCH);
+      const numbered = batch.map((t,i)=>`[${b+i+1}] ${t}`).join("\n");
+
+      const prompt = `Translate each numbered item from English to ${langName}.
 
 CRITICAL RULES:
-1. Keep these terms exactly in English, do not translate: ${preserveList}
-2. Keep all °C, %, time formats (MM:SS) exactly as written  
-3. Keep all food names that are Asian-origin exactly as written
-4. The phrase "Seeing is believing. Seeing is not enough. We must model it." — translate naturally but preserve its philosophical precision
-5. Return ONLY the numbered translations in EXACTLY this format:
-[1] translated text here
-[2] translated text here
-(no other text, no explanations)
+1. Keep these terms exactly in English: ${preserveList}
+2. Keep all °C, % values, time formats (MM:SS) exactly as written
+3. Keep numbers, codes, model names exactly as written
+4. Return ONLY numbered translations in this exact format:
+[1] translation here
+[2] translation here
+No other text.
 
-Items to translate:
+Items:
 ${numbered}`;
 
-    try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ prompt })
-      });
-      const data = await response.json();
-      const resultText = data.content?.[0]?.text || "";
+      try {
+        const response = await fetch("/api/translate", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ prompt })
+        });
 
-      // Parse numbered results
-      const newStore = {...tStore};
-      stringsToTranslate.forEach((s,i) => {
-        const match = resultText.match(new RegExp(`\[${i+1}\]\s*([\s\S]*?)(?=\[${i+2}\]|$)`));
-        if(match) newStore[s.key] = match[1].trim();
-      });
-      setTStore(newStore);
-    } catch(e) {
-      console.error("Translation failed:", e);
+        if(!response.ok) {
+          const errText = await response.text();
+          throw new Error(`API ${response.status}: ${errText.slice(0,100)}`);
+        }
+
+        const data = await response.json();
+        if(data.error) throw new Error(data.error.message || "API error");
+        const resultText = data.content?.[0]?.text || "";
+
+        batch.forEach((orig, i) => {
+          const idx = b + i + 1;
+          const match = resultText.match(new RegExp(`\\[${idx}\\]\\s*([^\\[]+)`));
+          if(match) pageMap[orig] = match[1].trim();
+        });
+      } catch(e) {
+        console.error("Batch translation error:", e);
+        setTError(e.message);
+        setTranslating(false);
+        return;
+      }
     }
+
+    setTStore(prev => ({...prev, [storeKey]: pageMap}));
     setTranslating(false);
+    setTVersion(v => v + 1);
   };
 
-  // Translate new page when chapter changes
+  // Apply DOM translation after render / store update
   React.useEffect(() => {
     if(lang !== "en") {
-      const pageStrings = PAGE_STRINGS[ch] || [];
-      const missing = pageStrings.filter(s => !tStore[`${lang}_${s.id}`]);
-      if(missing.length > 0) {
+      const storeKey = `${lang}_${ch}`;
+      if(tStore[storeKey]) {
+        applyDOMTranslation(lang, ch);
+      } else {
         translatePage(lang);
       }
     }
-  }, [ch, lang]);
+  }, [ch, lang, tStore, tVersion]);
 
   // Core translate hook — translates a string, caches result
-  const [tStore, setTStore] = useState({});
+  const [tStore, setTStore] = useState({});   // {lang_ch: {orig: translated}}
   const [tError, setTError] = useState("");
+  const [tVersion, setTVersion] = useState(0); // force re-apply after fetch
 
 
 
