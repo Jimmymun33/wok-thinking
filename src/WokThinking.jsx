@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 /* ═══════════════════════════════════════════
    THE SPEED KITCHEN — Complete Digital Book
@@ -560,6 +560,30 @@ function convertProfile(baseMW,baseTime,baseKey,targetKey){
 }
 
 
+const LANGUAGES = [
+  {code:"en", label:"English", flag:"🇬🇧", native:"English"},
+  {code:"zh-CN", label:"Simplified Chinese", flag:"🇨🇳", native:"简体中文"},
+  {code:"zh-TW", label:"Traditional Chinese", flag:"🇹🇼", native:"繁體中文"},
+  {code:"ms", label:"Bahasa Melayu", flag:"🇲🇾", native:"Bahasa Melayu"},
+  {code:"th", label:"Thai", flag:"🇹🇭", native:"ภาษาไทย"},
+  {code:"vi", label:"Vietnamese", flag:"🇻🇳", native:"Tiếng Việt"},
+  {code:"ko", label:"Korean", flag:"🇰🇷", native:"한국어"},
+  {code:"ja", label:"Japanese", flag:"🇯🇵", native:"日本語"},
+  {code:"fil", label:"Filipino", flag:"🇵🇭", native:"Filipino"},
+];
+
+const PRESERVE_TERMS = [
+  "Merrychef","conneX12e","conneX12 SP","conneX12 HP","conneX16",
+  "Maillard","impingement","magnetron","pyrolysis","HACCP",
+  "Char Siu","Laksa","Hokkien Mee","Gyoza","Bulgogi","Naan",
+  "Sambal Stingray","Miso Black Cod","Teriyaki","Gyoza",
+  "KitchenConnect","Frymaster","Garland","Convotherm","Multiplex",
+  "JMUN-IP-001-2026","NAFEM","CFSP","SCAMPER","FIFO",
+  "Fan 100%","MW 0%","MW 100%","260°C","Fan 80%","Fan 60%",
+  "Daniel Theyagu","Jimmy Mun",
+];
+
+
 const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@400;500&display=swap');
 :root{--ink:#0d0c0a;--paper:#f5ede0;--gold:#c97c2a;--text:#f0ead8;--muted:#8a7d69;--dim:#5a5040;--card:#161410;--border:#2a2620;--b2:#1e1c17;--green:#5ab870;--blue:#5090c0;--red:#c47060;}
@@ -732,6 +756,22 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;heigh
 .res-vl{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
 .res-old{font-family:'DM Mono',monospace;font-size:8px;color:#3a3020;text-decoration:line-through;margin-right:5px;}
 .wt{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;padding:2px 7px;border-radius:2px;background:#0a1a10;color:var(--green);border:1px solid #153025;margin-top:6px;display:inline-block;}
+.lang-btn{position:relative;padding:6px 10px;background:#111008;border:1px solid var(--border);border-radius:3px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .2s;margin:8px 18px 0;}
+.lang-btn:hover{border-color:var(--gold);}
+.lang-flag{font-size:14px;}
+.lang-name{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+.lang-menu{position:absolute;left:0;top:100%;margin-top:4px;background:#0d0c0a;border:1px solid var(--border);border-radius:4px;z-index:300;min-width:200px;box-shadow:0 8px 24px #00000080;overflow:hidden;}
+.lang-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;transition:background .15s;border-bottom:1px solid #111008;}
+.lang-item:last-child{border-bottom:none;}
+.lang-item:hover{background:#1a1205;}
+.lang-item.active{background:#1a1205;border-left:2px solid var(--gold);}
+.lang-native{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);}
+.lang-english{font-family:'DM Mono',monospace;font-size:7px;color:var(--dim);letter-spacing:1px;}
+.translate-bar{background:#1a1205;border-bottom:1px solid #2a1a05;padding:6px 18px;display:flex;align-items:center;gap:8px;}
+.translate-spinner{width:12px;height:12px;border:1.5px solid #3a2010;border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.t-block{position:relative;}
+.t-overlay{position:absolute;inset:0;background:#0d0c0a90;display:flex;align-items:center;justify-content:center;border-radius:4px;backdrop-filter:blur(2px);}
 @media(max-width:900px){
   .sidebar{transform:translateX(-196px);}.sidebar.open{transform:translateX(0);}
   .main{margin-left:0!important;}.hb{display:flex;}
@@ -762,6 +802,10 @@ export default function WokThinking() {
   const [cMW, setCMW] = useState(60);
   const [cTM, setCTM] = useState("01");
   const [baseModel, setBaseModel] = useState("base");
+  const [lang, setLang] = useState("en");
+  const [translating, setTranslating] = useState(false);
+  const [translations, setTranslations] = useState({});
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [cTS, setCTS] = useState("00");
 
   const chIdx = CHAPTERS.findIndex(c=>c.id===ch);
@@ -769,6 +813,18 @@ export default function WokThinking() {
   const CATS = ["All",...new Set(RECIPES.map(r=>r.cat))];
   const visible = RECIPES.filter(r=>(cat==="All"||r.cat===cat)&&(srch===""||r.name.toLowerCase().includes(srch.toLowerCase())));
   const baseTime = `${String(cTM).padStart(2,"0")}:${String(cTS).padStart(2,"0")}`;
+  // Simple translation lookup - NOT a hook
+  const t = (id, text) => {
+    if(lang === "en") return text;
+    return tStore[`${lang}_${id}`] || text;
+  };
+
+  // Translatable wrapper component
+  const TX = ({id, text, style, className}) => {
+    const translated = t(id, text);
+    return <span style={style} className={className}>{translated}</span>;
+  };
+
   const nav = (id) => { setCh(id); setSbOpen(false); setRecipe(null); };
 
   const advice = () => {
@@ -802,6 +858,126 @@ export default function WokThinking() {
     return a;
   };
 
+  const currentLang = LANGUAGES.find(l=>l.code===lang)||LANGUAGES[0];
+
+  // Key translatable strings organized by section
+  const PAGE_STRINGS = {
+    cover: [
+      {id:"cover-sub", text:"APAC Kitchen Science, Systems Design and High-Speed Cooking"},
+      {id:"stat-1", text:"APAC Recipes"},{id:"stat-2", text:"Frameworks"},
+      {id:"stat-3", text:"Markets"},{id:"stat-4", text:"Science"},
+      {id:"cover-disc", text:"An independent publication by Jimmy Mun in a personal capacity. Not affiliated with, sponsored by, or produced on behalf of any equipment manufacturer or employer. Original culinary findings including steam cavity microwave interference (Ref: JMUN-IP-001-2026) are the intellectual property of the author. All prices, costs and financial figures appearing in this publication are indicative estimates only and subject to change."},
+    ],
+    phrase: [
+      {id:"phrase-1", text:"Seeing is believing."},
+      {id:"phrase-2", text:"Seeing is not enough."},
+      {id:"phrase-3", text:"We must model it."},
+      {id:"mentor-role", text:"Mentor — Agile · Systems · Design · Creative Thinking"},
+      {id:"btn-continue", text:"Continue →"},
+    ],
+    ack: [
+      {id:"ack-title", text:"On the Shoulders of Others."},
+      {id:"ack-intro", text:"No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward."},
+      {id:"ack-daniel-note", text:"The phrase that anchors this entire book — 'Seeing is believing. Seeing is not enough. We must model it.' — came from a conversation with Daniel that changed how I see everything. His teaching gave me the framework to understand what I had been practising intuitively for years. The intellectual architecture of Part II of this book is built on his foundation."},
+      {id:"ack-kitchens", text:"To every chef who let me into their kitchen, every operator who pushed back on a profile setting, every student who asked a question I couldn't immediately answer — you shaped this book more than any textbook could."},
+      {id:"ack-title", text:"On the Shoulders of Others."},
+      {id:"ack-title-em", text:"Shoulders"},
+      {id:"ack-title-2", text:" of Others."},
+    ],
+    preface: [
+      {id:"pre-title", text:"From Demo to Model."},
+      {id:"pre-p1", text:"For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it."},
+      {id:"pre-p2", text:"But seeing was never enough — not for me, and eventually not for the operators I was trying to help. They could watch the demo. They could taste the result. And then they'd go back to their kitchens and the knowledge would stop there, because nobody had given them the model behind what they saw."},
+      {id:"pre-p3", text:"That gap — between observation and understanding — is what this book exists to close."},
+      {id:"pre-moment", text:"I was sitting in a session with Daniel Theyagu when he said it: 'Seeing is believing. Seeing is not enough. We must model it.' I had been running food demonstrations across fifteen APAC markets for years. But I had never heard anyone name what was missing on the other side of that moment. Daniel named it. You must model it."},
+    ],
+    intro: [
+      {id:"intro-title", text:"Why APAC Needs a Different Kind of Kitchen Thinking."},
+      {id:"intro-p1", text:"The cookbooks available to APAC culinary students today were mostly written in the West, rooted in French classical technique, designed for kitchens built on infrastructure that much of Asia doesn't have and doesn't need."},
+      {id:"intro-p2", text:"The business books available to APAC food entrepreneurs treat the kitchen as a black box — inputs and outputs, cost and margin, but nothing about what happens in between and why it matters."},
+      {id:"intro-p3", text:"The equipment manuals tell you what buttons to press. They do not tell you why those buttons work, what happens at the molecular level when you press them, or how the decision to press them connects to every other decision in your operation."},
+    ],
+  };
+
+  const translatePage = async (targetLang) => {
+    if(targetLang === "en") { setLang("en"); setShowLangMenu(false); return; }
+    setShowLangMenu(false);
+    setTranslating(true);
+    setLang(targetLang);
+
+    // Get strings for current page + phrase page (always needed)
+    const pagesToTranslate = [ch, "phrase", "cover"];
+    const stringsToTranslate = [];
+
+    pagesToTranslate.forEach(pageId => {
+      const pageStrings = PAGE_STRINGS[pageId] || [];
+      pageStrings.forEach(s => {
+        const key = `${targetLang}_${s.id}`;
+        if(!tStore[key]) stringsToTranslate.push({...s, key});
+      });
+    });
+
+    if(stringsToTranslate.length === 0) { setTranslating(false); return; }
+
+    // Build one batch translation request
+    const preserveList = PRESERVE_TERMS.join(", ");
+    const langName = LANGUAGES.find(l=>l.code===targetLang)?.label || targetLang;
+    const numbered = stringsToTranslate.map((s,i)=>`[${i+1}] ${s.text}`).join("\n");
+
+
+    const prompt = `Translate each numbered item from English to ${langName}.
+
+CRITICAL RULES:
+1. Keep these terms exactly in English, do not translate: ${preserveList}
+2. Keep all °C, %, time formats (MM:SS) exactly as written  
+3. Keep all food names that are Asian-origin exactly as written
+4. The phrase "Seeing is believing. Seeing is not enough. We must model it." — translate naturally but preserve its philosophical precision
+5. Return ONLY the numbered translations in EXACTLY this format:
+[1] translated text here
+[2] translated text here
+(no other text, no explanations)
+
+Items to translate:
+${numbered}`;
+
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ prompt })
+      });
+      const data = await response.json();
+      const resultText = data.content?.[0]?.text || "";
+
+      // Parse numbered results
+      const newStore = {...tStore};
+      stringsToTranslate.forEach((s,i) => {
+        const match = resultText.match(new RegExp(`\[${i+1}\]\s*([\s\S]*?)(?=\[${i+2}\]|$)`));
+        if(match) newStore[s.key] = match[1].trim();
+      });
+      setTStore(newStore);
+    } catch(e) {
+      console.error("Translation failed:", e);
+    }
+    setTranslating(false);
+  };
+
+  // Translate new page when chapter changes
+  React.useEffect(() => {
+    if(lang !== "en") {
+      const pageStrings = PAGE_STRINGS[ch] || [];
+      const missing = pageStrings.filter(s => !tStore[`${lang}_${s.id}`]);
+      if(missing.length > 0) {
+        translatePage(lang);
+      }
+    }
+  }, [ch, lang]);
+
+  // Core translate hook — translates a string, caches result
+  const [tStore, setTStore] = useState({});
+
+
+
   return (
     <>
       <style>{CSS}</style>
@@ -824,6 +1000,33 @@ export default function WokThinking() {
             </div>;
           })}
         </nav>
+        {/* LANGUAGE SELECTOR */}
+        <div style={{borderTop:"1px solid var(--b2)",padding:"12px 14px",background:"#0d0c0a"}}>
+          <div style={{fontFamily:"DM Mono,monospace",fontSize:"6px",letterSpacing:"3px",color:"#5a5040",textTransform:"uppercase",marginBottom:"7px"}}>🌐 Language</div>
+          <div style={{position:"relative"}}>
+            <div onClick={()=>setShowLangMenu(o=>!o)} style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:"#1a1814",border:"1px solid #3a3020",borderRadius:"4px",cursor:"pointer",transition:"all .2s"}}>
+              <span style={{fontSize:"16px"}}>{currentLang.flag}</span>
+              <span style={{fontFamily:"DM Mono,monospace",fontSize:"9px",color:"var(--text)",flex:1}}>{currentLang.native}</span>
+              <span style={{color:"var(--gold)",fontSize:"9px",fontFamily:"DM Mono,monospace"}}>{showLangMenu?"▲":"▼"}</span>
+            </div>
+            {showLangMenu&&(
+              <div style={{position:"absolute",bottom:"100%",left:0,right:0,marginBottom:"4px",background:"#0d0c0a",border:"1px solid #3a3020",borderRadius:"4px",zIndex:300,boxShadow:"0 -8px 24px #00000080",overflow:"hidden",maxHeight:"280px",overflowY:"auto"}}>
+                {LANGUAGES.map(l=>(
+                  <div key={l.code} onClick={()=>translatePage(l.code)}
+                    style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",cursor:"pointer",background:lang===l.code?"#1a1205":"transparent",borderBottom:"1px solid #111008",transition:"background .15s",borderLeft:lang===l.code?"2px solid var(--gold)":"2px solid transparent"}}>
+                    <span style={{fontSize:"15px"}}>{l.flag}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontFamily:"DM Mono,monospace",fontSize:"9px",color:lang===l.code?"var(--gold)":"var(--text)"}}>{l.native}</div>
+                      <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020",letterSpacing:"1px"}}>{l.label}</div>
+                    </div>
+                    {lang===l.code&&<span style={{color:"var(--gold)",fontSize:"10px"}}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="sb-prog">
           <div className="prog-bar"><div className="prog-fill" style={{width:`${prog}%`}}/></div>
           <div className="prog-txt">Ch {chIdx+1} of {CHAPTERS.length}</div>
@@ -831,17 +1034,31 @@ export default function WokThinking() {
       </aside>
 
       <main className="main" style={{marginLeft:sbOpen?"0":"196px"}}>
+        {translating&&(
+          <div className="translate-bar">
+            <div className="translate-spinner"/>
+            <span style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"2px",color:"var(--gold)",textTransform:"uppercase"}}>Translating to {currentLang.native}...</span>
+          </div>
+        )}
+        {lang!=="en"&&!translating&&(
+          <div style={{background:"#111008",borderBottom:"1px solid var(--b2)",padding:"6px 18px",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+            <span style={{fontSize:"14px"}}>{currentLang.flag}</span>
+            <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"var(--gold)",textTransform:"uppercase"}}>{currentLang.native}</span>
+            <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020",letterSpacing:"1px"}}>Auto-translated · Technical terms preserved in English · For verified translation contact your regional distributor</span>
+            <button onClick={()=>{setLang("en");}} style={{marginLeft:"auto",fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"1px",color:"var(--dim)",background:"none",border:"1px solid var(--border)",borderRadius:"2px",padding:"2px 7px",cursor:"pointer"}}>Back to English</button>
+          </div>
+        )}
 
         <div className={`pg${ch==="cover"?" on":""}`}>
           <div className="cover-pg cv">
             <div className="cv-tag">A Culinary Intelligence Guide</div>
             <h1>Wok<br/><em>Thinking</em></h1>
             <div className="cv-rule"/>
-            <div className="cv-sub">APAC Kitchen Science, Systems Design and High-Speed Cooking</div>
+            <div className="cv-sub"><TX id="cover-sub" text="APAC Kitchen Science, Systems Design and High-Speed Cooking"/></div>
             <div className="cv-by">By Jimmy Mun · 2026</div>
             <div className="cv-stats">
-              {[["22","APAC Recipes"],["4","Frameworks"],["15","Markets"],["Original","Science"]].map(([n,l])=>(
-                <div key={l}><div className="cst-n">{n}</div><div className="cst-l">{l}</div></div>
+              {[["22",{id:"stat-1",t:"APAC Recipes"}],["4",{id:"stat-2",t:"Frameworks"}],["15",{id:"stat-3",t:"Markets"}],["Original",{id:"stat-4",t:"Science"}]].map(([n,l])=>(
+                <div key={l.id}><div className="cst-n">{n}</div><div className="cst-l"><TX id={l.id} text={l.t}/></div></div>
               ))}
             </div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:"13px",color:"#8a7d69",fontStyle:"italic",maxWidth:"420px",margin:"18px auto",lineHeight:"1.8",padding:"0 10px"}}>
@@ -860,14 +1077,14 @@ export default function WokThinking() {
         <div className={`pg${ch==="phrase"?" on":""}`}>
           <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",textAlign:"center",padding:"60px 28px",background:"radial-gradient(ellipse at 50% 40%,#1a1408 0%,#0d0c0a 70%)"}}>
             <div style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"5px",color:"#3a3020",textTransform:"uppercase",marginBottom:"48px"}}>The Thesis</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#8a7d69",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}>Seeing is believing.</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#b5a894",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}>Seeing is not enough.</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"900",color:"#f0ead8",fontStyle:"italic",lineHeight:"1.9",marginBottom:"40px"}}>We must model it.</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#8a7d69",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}><TX id="phrase-1" text="Seeing is believing."/></div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#b5a894",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}><TX id="phrase-2" text="Seeing is not enough."/></div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"900",color:"#f0ead8",fontStyle:"italic",lineHeight:"1.9",marginBottom:"40px"}}><TX id="phrase-3" text="We must model it."/></div>
             <div style={{width:"32px",height:"1px",background:"#c97c2a",margin:"0 auto 18px"}}/>
             <div style={{fontFamily:"DM Mono,monospace",fontSize:"9px",letterSpacing:"3px",color:"#c97c2a",textTransform:"uppercase",marginBottom:"4px"}}>Daniel Theyagu</div>
-            <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"#3a3020",textTransform:"uppercase"}}>Mentor — Agile · Systems · Design · Creative Thinking</div>
+            <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"#3a3020",textTransform:"uppercase"}}><TX id="mentor-role" text="Mentor — Agile · Systems · Design · Creative Thinking"/></div>
             <div style={{marginTop:"60px"}}>
-              <button className="btn" onClick={()=>nav("ack")}>Continue →</button>
+              <button className="btn" onClick={()=>nav("ack")}><TX id="btn-continue" text="Continue →"/></button>
             </div>
           </div>
         </div>
@@ -876,8 +1093,8 @@ export default function WokThinking() {
         <div className={`pg${ch==="ack"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Acknowledgements</div>
-            <h1 className="cht">On the <em>Shoulders</em><br/>of Others.</h1>
-            <p className="body">No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward.</p>
+            <h1 className="cht"><TX id="ack-title" text="On the "/><em><TX id="ack-title-em" text="Shoulders"/></em><TX id="ack-title-2" text=" of Others."/></h1>
+            <p className="body"><TX id="ack-intro" text="No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward."/></p>
             <div className="div"/>
             {[
               {name:"Daniel Theyagu",role:"Mentor — Agile Methodology, Systems Thinking, Design Thinking & Creative Thinking",note:"The phrase that anchors this entire book — 'Seeing is believing. Seeing is not enough. We must model it.' — came from a conversation with Daniel that changed how I see everything. His teaching gave me the framework to understand what I had been practising intuitively for years. The intellectual architecture of Part II of this book is built on his foundation."},
@@ -898,8 +1115,8 @@ export default function WokThinking() {
         <div className={`pg${ch==="preface"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Preface</div>
-            <h1 className="cht">From Demo<br/>to <em>Model.</em></h1>
-            <p className="body">For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it.</p>
+            <h1 className="cht"><TX id="pre-title-1" text="From Demo"/> <br/>to <em><TX id="pre-title-2" text="Model."/></em></h1>
+            <p className="body"><TX id="pre-p1" text="For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it."/></p>
             <p className="body">But seeing was never enough — not for me, and eventually not for the operators I was trying to help. They could watch the demo. They could taste the result. And then they'd go back to their kitchens and the knowledge would stop there, because nobody had given them the model behind what they saw.</p>
             <p className="body">That gap — between observation and understanding — is what this book exists to close.</p>
             <div className="ins">
@@ -918,7 +1135,7 @@ export default function WokThinking() {
         <div className={`pg${ch==="intro"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Introduction</div>
-            <h1 className="cht">Why APAC Needs a<br/><em>Different</em> Kind of<br/>Kitchen Thinking.</h1>
+            <h1 className="cht"><TX id="intro-title" text="Why APAC Needs a Different Kind of Kitchen Thinking."/></h1>
             <p className="body">The cookbooks available to APAC culinary students today were mostly written in the West, rooted in French classical technique, designed for kitchens built on infrastructure that much of Asia doesn't have and doesn't need.</p>
             <p className="body">The business books available to APAC food entrepreneurs treat the kitchen as a black box — inputs and outputs, cost and margin, but nothing about what happens in between and why it matters.</p>
             <p className="body">The equipment manuals tell you what buttons to press. They do not tell you why those buttons work, what happens at the molecular level when you press them, or how the decision to press them connects to every other decision in your operation.</p>
@@ -984,11 +1201,11 @@ export default function WokThinking() {
             <div className="cv-tag">A Culinary Intelligence Guide</div>
             <h1>Wok<br/><em>Thinking</em></h1>
             <div className="cv-rule"/>
-            <div className="cv-sub">APAC Kitchen Science, Systems Design and High-Speed Cooking</div>
+            <div className="cv-sub"><TX id="cover-sub" text="APAC Kitchen Science, Systems Design and High-Speed Cooking"/></div>
             <div className="cv-by">By Jimmy Mun · 2026</div>
             <div className="cv-stats">
-              {[["22","APAC Recipes"],["4","Frameworks"],["15","Markets"],["Original","Science"]].map(([n,l])=>(
-                <div key={l}><div className="cst-n">{n}</div><div className="cst-l">{l}</div></div>
+              {[["22",{id:"stat-1",t:"APAC Recipes"}],["4",{id:"stat-2",t:"Frameworks"}],["15",{id:"stat-3",t:"Markets"}],["Original",{id:"stat-4",t:"Science"}]].map(([n,l])=>(
+                <div key={l.id}><div className="cst-n">{n}</div><div className="cst-l"><TX id={l.id} text={l.t}/></div></div>
               ))}
             </div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:"13px",color:"#8a7d69",fontStyle:"italic",maxWidth:"420px",margin:"18px auto",lineHeight:"1.8"}}>
@@ -1666,12 +1883,12 @@ export default function WokThinking() {
         <div className={`pg${ch==="phrase"?" on":""}`}>
           <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",textAlign:"center",padding:"60px 28px",background:"radial-gradient(ellipse at 50% 40%,#1a1408 0%,#0d0c0a 70%)"}}>
             <div style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"5px",color:"#3a3020",textTransform:"uppercase",marginBottom:"48px"}}>The Thesis</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#8a7d69",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}>Seeing is believing.</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#b5a894",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}>Seeing is not enough.</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"900",color:"#f0ead8",fontStyle:"italic",lineHeight:"1.9",marginBottom:"40px"}}>We must model it.</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#8a7d69",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}><TX id="phrase-1" text="Seeing is believing."/></div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"400",color:"#b5a894",fontStyle:"italic",lineHeight:"1.9",marginBottom:"8px"}}><TX id="phrase-2" text="Seeing is not enough."/></div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(22px,4vw,38px)",fontWeight:"900",color:"#f0ead8",fontStyle:"italic",lineHeight:"1.9",marginBottom:"40px"}}><TX id="phrase-3" text="We must model it."/></div>
             <div style={{width:"32px",height:"1px",background:"#c97c2a",margin:"0 auto 18px"}}/>
             <div style={{fontFamily:"DM Mono,monospace",fontSize:"9px",letterSpacing:"3px",color:"#c97c2a",textTransform:"uppercase",marginBottom:"4px"}}>Daniel Theyagu</div>
-            <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"#3a3020",textTransform:"uppercase"}}>Mentor — Agile · Systems · Design · Creative Thinking</div>
+            <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"#3a3020",textTransform:"uppercase"}}><TX id="mentor-role" text="Mentor — Agile · Systems · Design · Creative Thinking"/></div>
             <div style={{marginTop:"60px"}}>
               <button className="btn" onClick={()=>nav("ack")}>Continue →</button>
             </div>
@@ -1682,8 +1899,8 @@ export default function WokThinking() {
         <div className={`pg${ch==="ack"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Acknowledgements</div>
-            <h1 className="cht">On the <em>Shoulders</em><br/>of Others.</h1>
-            <p className="body">No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward.</p>
+            <h1 className="cht"><TX id="ack-title" text="On the "/><em><TX id="ack-title-em" text="Shoulders"/></em><TX id="ack-title-2" text=" of Others."/></h1>
+            <p className="body"><TX id="ack-intro" text="No serious work is built alone. This book stands on the thinking, teaching and generosity of people who gave their knowledge freely and trusted me to carry it forward."/></p>
             <div className="div"/>
             {[
               {name:"Daniel Theyagu",role:"Mentor — Agile Methodology, Systems Thinking, Design Thinking & Creative Thinking",note:"The phrase that anchors this entire book — 'Seeing is believing. Seeing is not enough. We must model it.' — came from a conversation with Daniel that changed how I see everything. His teaching gave me the framework to understand what I had been practising intuitively for years. The intellectual architecture of Part II of this book is built on his foundation."},
@@ -1704,8 +1921,8 @@ export default function WokThinking() {
         <div className={`pg${ch==="preface"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Preface</div>
-            <h1 className="cht">From Demo<br/>to <em>Model.</em></h1>
-            <p className="body">For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it.</p>
+            <h1 className="cht"><TX id="pre-title-1" text="From Demo"/> <br/>to <em><TX id="pre-title-2" text="Model."/></em></h1>
+            <p className="body"><TX id="pre-p1" text="For years my job was to make food in front of people. Walk into a kitchen, set up a machine, cook something in under two minutes that should have taken twenty, and watch the room shift from sceptical to curious. It worked. People believed it when they saw it."/></p>
             <p className="body">But seeing was never enough — not for me, and eventually not for the operators I was trying to help. They could watch the demo. They could taste the result. And then they'd go back to their kitchens and the knowledge would stop there, because nobody had given them the model behind what they saw.</p>
             <p className="body">That gap — between observation and understanding — is what this book exists to close.</p>
             <div className="ins">
@@ -1724,7 +1941,7 @@ export default function WokThinking() {
         <div className={`pg${ch==="intro"?" on":""}`}>
           <div className="wrap">
             <div className="ey">Introduction</div>
-            <h1 className="cht">Why APAC Needs a<br/><em>Different</em> Kind of<br/>Kitchen Thinking.</h1>
+            <h1 className="cht"><TX id="intro-title" text="Why APAC Needs a Different Kind of Kitchen Thinking."/></h1>
             <p className="body">The cookbooks available to APAC culinary students today were mostly written in the West, rooted in French classical technique, designed for kitchens built on infrastructure that much of Asia doesn't have and doesn't need.</p>
             <p className="body">The business books available to APAC food entrepreneurs treat the kitchen as a black box — inputs and outputs, cost and margin, but nothing about what happens in between and why it matters.</p>
             <p className="body">The equipment manuals tell you what buttons to press. They do not tell you why those buttons work, what happens at the molecular level when you press them, or how the decision to press them connects to every other decision in your operation.</p>
@@ -1790,11 +2007,11 @@ export default function WokThinking() {
             <div className="cv-tag">A Culinary Intelligence Guide</div>
             <h1>Wok<br/><em>Thinking</em></h1>
             <div className="cv-rule"/>
-            <div className="cv-sub">APAC Kitchen Science, Systems Design and High-Speed Cooking</div>
+            <div className="cv-sub"><TX id="cover-sub" text="APAC Kitchen Science, Systems Design and High-Speed Cooking"/></div>
             <div className="cv-by">By Jimmy Mun · 2026</div>
             <div className="cv-stats">
-              {[["22","APAC Recipes"],["4","Frameworks"],["15","Markets"],["Original","Science"]].map(([n,l])=>(
-                <div key={l}><div className="cst-n">{n}</div><div className="cst-l">{l}</div></div>
+              {[["22",{id:"stat-1",t:"APAC Recipes"}],["4",{id:"stat-2",t:"Frameworks"}],["15",{id:"stat-3",t:"Markets"}],["Original",{id:"stat-4",t:"Science"}]].map(([n,l])=>(
+                <div key={l.id}><div className="cst-n">{n}</div><div className="cst-l"><TX id={l.id} text={l.t}/></div></div>
               ))}
             </div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:"13px",color:"#8a7d69",fontStyle:"italic",maxWidth:"420px",margin:"18px auto",lineHeight:"1.8"}}>
