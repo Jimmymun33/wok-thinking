@@ -975,6 +975,7 @@ ${numbered}`;
 
   // Core translate hook — translates a string, caches result
   const [tStore, setTStore] = useState({});
+  const [tError, setTError] = useState("");
 
 
 
@@ -1040,12 +1041,21 @@ ${numbered}`;
             <span style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"2px",color:"var(--gold)",textTransform:"uppercase"}}>Translating to {currentLang.native}...</span>
           </div>
         )}
+        {translating&&(
+          <div className="translate-bar">
+            <div className="translate-spinner"/>
+            <span style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"2px",color:"var(--gold)",textTransform:"uppercase"}}>Translating to {currentLang.native}...</span>
+          </div>
+        )}
         {lang!=="en"&&!translating&&(
-          <div style={{background:"#111008",borderBottom:"1px solid var(--b2)",padding:"6px 18px",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+          <div style={{background: tError?"#1a0a05":"#111008",borderBottom:"1px solid var(--b2)",padding:"6px 18px",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
             <span style={{fontSize:"14px"}}>{currentLang.flag}</span>
-            <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"var(--gold)",textTransform:"uppercase"}}>{currentLang.native}</span>
-            <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020",letterSpacing:"1px"}}>Auto-translated · Technical terms preserved in English · For verified translation contact your regional distributor</span>
-            <button onClick={()=>{setLang("en");}} style={{marginLeft:"auto",fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"1px",color:"var(--dim)",background:"none",border:"1px solid var(--border)",borderRadius:"2px",padding:"2px 7px",cursor:"pointer"}}>Back to English</button>
+            <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:tError?"#c47060":"var(--gold)",textTransform:"uppercase"}}>{currentLang.native}</span>
+            {tError
+              ? <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#c47060",letterSpacing:"1px",flex:1}}>⚠ {tError} — <span style={{color:"#5a3020",textDecoration:"underline",cursor:"pointer"}} onClick={()=>translatePage(lang)}>Retry</span></span>
+              : <span style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020",letterSpacing:"1px"}}>Auto-translated · Technical terms preserved in English · For verified translation contact your regional distributor</span>
+            }
+            <button onClick={()=>{setLang("en");setTError("");}} style={{marginLeft:"auto",fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"1px",color:"var(--dim)",background:"none",border:"1px solid var(--border)",borderRadius:"2px",padding:"2px 7px",cursor:"pointer"}}>Back to English</button>
           </div>
         )}
 
