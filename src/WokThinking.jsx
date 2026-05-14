@@ -543,15 +543,20 @@ const MODELS={
   c16:{label:"conneX16",mw:2000,total:6.0,cavity:16,color:"#5ab870"},
 };
 
-function convertProfile(baseMW,baseTime,targetKey){
+function convertProfile(baseMW,baseTime,baseKey,targetKey){
+  const base=MODELS[baseKey];
   const t=MODELS[targetKey];
-  const watts=(baseMW/100)*800;
+  // Calculate actual watts delivered from base model
+  const watts=baseMW===0?0:Math.round((baseMW/100)*base.mw);
+  // Calculate equivalent MW% on target model to deliver same watts
   const newMW=baseMW===0?0:Math.min(100,Math.max(5,Math.round((watts/t.mw)*100)));
   const [mm,ss]=baseTime.split(":").map(Number);
   const secs=mm*60+ss;
-  const newSecs=targetKey==="c16"&&secs<60?Math.round(secs*1.12):secs;
+  // Time adjustment: conneX16 larger cavity needs slight time increase for short cooks
+  const cavityFactor=(baseKey==="c16"&&targetKey!=="c16")?0.92:(targetKey==="c16"&&baseKey!=="c16"&&secs<60?1.08:1);
+  const newSecs=Math.round(secs*cavityFactor);
   const nMM=Math.floor(newSecs/60),nSS=newSecs%60;
-  return{mw:newMW,time:`${String(nMM).padStart(2,"0")}:${String(nSS).padStart(2,"0")}`,watts:Math.round(watts)};
+  return{mw:newMW,time:`${String(nMM).padStart(2,"0")}:${String(nSS).padStart(2,"0")}`,watts,changed:newMW!==baseMW||newSecs!==secs};
 }
 
 
@@ -756,6 +761,7 @@ export default function WokThinking() {
   const [cFan, setCFan] = useState(80);
   const [cMW, setCMW] = useState(60);
   const [cTM, setCTM] = useState("01");
+  const [baseModel, setBaseModel] = useState("base");
   const [cTS, setCTS] = useState("00");
 
   const chIdx = CHAPTERS.findIndex(c=>c.id===ch);
@@ -2857,86 +2863,140 @@ export default function WokThinking() {
           <div className="wrap" style={{paddingBottom:0}}>
             <div className="ey">Appendix — Cross-Model Conversion</div>
             <h1 className="cht">Profile <em>Calculator.</em></h1>
-            <p className="body">All recipes developed on conneX12e (800W MW). Enter any base profile to calculate the correct settings for SP, HP, and conneX16.</p>
+            <p className="body">Select your source model, enter any profile, and instantly see the correct settings for all other models. All values update live as you adjust the sliders.</p>
           </div>
-          <div className="calc-grid" style={{padding:"0 36px 36px"}}>
-            <div className="calc-sb">
-              <div style={{fontFamily:"DM Mono",fontSize:"7px",letterSpacing:"3px",color:"var(--dim)",textTransform:"uppercase",marginBottom:"14px"}}>Base: conneX12e · 800W Microwave</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"6px",marginBottom:"18px"}}>
+
+          <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:"0",minHeight:"70vh",padding:"0 36px 36px"}}>
+            {/* LEFT — INPUT */}
+            <div style={{borderRight:"1px solid var(--b2)",padding:"22px 22px 22px 0"}}>
+
+              {/* Model selector */}
+              <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"3px",color:"var(--dim)",textTransform:"uppercase",marginBottom:"10px"}}>① Select Source Model</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",marginBottom:"20px"}}>
                 {Object.entries(MODELS).map(([k,m])=>(
-                  <div key={k} style={{background:"#111008",borderRadius:"3px",padding:"8px",border:`1px solid ${k==="base"?m.color:"var(--border)"}`,textAlign:"center"}}>
-                    <div style={{fontFamily:"DM Mono",fontSize:"7px",color:m.color,letterSpacing:"1px",textTransform:"uppercase",marginBottom:"3px"}}>{m.label}</div>
-                    <div style={{fontFamily:"Playfair Display",fontSize:"14px",fontWeight:"700",color:"var(--text)",lineHeight:"1"}}>{m.mw}W</div>
+                  <div key={k} onClick={()=>setBaseModel(k)} style={{background:baseModel===k?"linear-gradient(135deg,#2a1a05,#1e1205)":"#111008",borderRadius:"4px",padding:"10px",border:baseModel===k?`2px solid ${m.color}`:"1px solid var(--border)",textAlign:"center",cursor:"pointer",transition:"all .2s",transform:baseModel===k?"translateY(-2px)":"none",boxShadow:baseModel===k?`0 4px 16px ${m.color}40`:"none"}}>
+                    <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:baseModel===k?m.color:"#3a3020",letterSpacing:"1px",textTransform:"uppercase",marginBottom:"3px"}}>{m.label}</div>
+                    <div style={{fontFamily:"Playfair Display,serif",fontSize:"16px",fontWeight:"900",color:baseModel===k?m.color:"#5a5040",lineHeight:"1"}}>{m.mw}W</div>
+                    {baseModel===k&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"6px",color:m.color,marginTop:"3px",letterSpacing:"1px"}}>SOURCE ✓</div>}
                   </div>
                 ))}
               </div>
-              {[{lb:"Temperature",val:cTemp,set:setCTemp,min:100,max:275,unit:"°C",c:"#e06030"},{lb:"Fan",val:cFan,set:setCFan,min:10,max:100,unit:"%",c:"var(--gold)"},{lb:"Microwave",val:cMW,set:setCMW,min:0,max:100,unit:"%",c:"var(--blue)"}].map(sl=>(
+
+              {/* Sliders */}
+              <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"3px",color:"var(--dim)",textTransform:"uppercase",marginBottom:"10px"}}>② Enter Profile</div>
+
+              {[
+                {lb:"Temperature",val:cTemp,set:setCTemp,min:100,max:275,unit:"°C",c:"#e06030"},
+                {lb:"Fan",val:cFan,set:setCFan,min:10,max:100,unit:"%",c:"var(--gold)"},
+                {lb:"Microwave",val:cMW,set:setCMW,min:0,max:100,unit:"%",c:"var(--blue)"},
+              ].map(sl=>(
                 <div className="sl-g" key={sl.lb}>
-                  <div className="sl-h"><span className="sl-n">{sl.lb}</span><span className="sl-v" style={{color:sl.c}}>{sl.val}{sl.unit}</span></div>
-                  <input type="range" min={sl.min} max={sl.max} value={sl.val} onChange={e=>sl.set(Number(e.target.value))} style={{"--c":sl.c,"--p":`${((sl.val-sl.min)/(sl.max-sl.min))*100}%`}}/>
+                  <div className="sl-h">
+                    <span className="sl-n">{sl.lb}</span>
+                    <span className="sl-v" style={{color:sl.c}}>{sl.val}{sl.unit}</span>
+                  </div>
+                  <input type="range" min={sl.min} max={sl.max} value={sl.val}
+                    onChange={e=>sl.set(Number(e.target.value))}
+                    style={{"--c":sl.c,"--p":`${((sl.val-sl.min)/(sl.max-sl.min))*100}%`}}/>
+                  <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#2a2820",marginTop:"2px"}}>
+                    {sl.lb==="Microwave"?`${Math.round((sl.val/100)*MODELS[baseModel].mw)}W delivered`:sl.lb==="Fan"?sl.val<20?"Low — no browning":sl.val<60?"Moderate impingement":"Active impingement":sl.val<150?"Below Maillard zone":sl.val<200?"Gentle Maillard":sl.val<240?"Active Maillard zone":"Max Maillard — watch glaze"}
+                  </div>
                 </div>
               ))}
-              <div style={{marginBottom:"14px"}}>
-                <div className="sl-n" style={{marginBottom:"6px"}}>Cook Time (MM : SS)</div>
-                <div style={{display:"flex",gap:"7px",alignItems:"center"}}>
+
+              {/* Time */}
+              <div className="sl-g">
+                <div className="sl-h"><span className="sl-n">Cook Time</span></div>
+                <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
                   {[[cTM,setCTM,0,10,"MM"],[cTS,setCTS,0,59,"SS"]].map(([val,set,min,max,lbl],i)=>(
                     <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px"}}>
-                      <input type="number" min={min} max={max} value={val} onChange={e=>set(String(e.target.value).padStart(2,"0"))}
-                        style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"3px",color:"var(--text)",fontFamily:"DM Mono",fontSize:"13px",padding:"7px",width:"54px",textAlign:"center",outline:"none"}}/>
-                      <div style={{fontFamily:"DM Mono",fontSize:"7px",color:"var(--dim)",letterSpacing:"1px"}}>{lbl}</div>
+                      <input type="number" min={min} max={max} value={val}
+                        onChange={e=>{const v=Math.max(min,Math.min(max,Number(e.target.value)));set(String(v).padStart(2,"0"));}}
+                        style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"3px",color:"var(--text)",fontFamily:"DM Mono,monospace",fontSize:"14px",padding:"8px",width:"58px",textAlign:"center",outline:"none"}}/>
+                      <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"var(--dim)",letterSpacing:"1px"}}>{lbl}</div>
+                    </div>
+                  ))}
+                  <span style={{fontFamily:"DM Mono,monospace",fontSize:"20px",color:"#2a2620",marginBottom:"14px"}}>:</span>
+                  <div style={{fontFamily:"DM Mono,monospace",fontSize:"8px",color:"var(--muted)",marginBottom:"12px"}}>
+                    {(Number(cTM)*60+Number(cTS))}s total
+                  </div>
+                </div>
+              </div>
+
+              {/* Source profile summary */}
+              <div style={{background:MODELS[baseModel].color+"20",border:`1px solid ${MODELS[baseModel].color}40`,borderRadius:"4px",padding:"10px 12px",marginTop:"8px"}}>
+                <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:MODELS[baseModel].color,textTransform:"uppercase",marginBottom:"8px"}}>Source — {MODELS[baseModel].label}</div>
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                  {[{l:"TEMP",v:`${cTemp}°C`,c:"#e06030"},{l:"TIME",v:`${cTM}:${cTS}`,c:"var(--green)"},{l:"FAN",v:`${cFan}%`,c:"var(--gold)"},{l:"MW",v:`${cMW}%`,c:"var(--blue)"},{l:"WATTS",v:`${Math.round((cMW/100)*MODELS[baseModel].mw)}W`,c:MODELS[baseModel].color}].map(s=>(
+                    <div key={s.l} style={{background:"#111008",borderRadius:"3px",padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontFamily:"DM Mono,monospace",fontSize:"11px",color:s.c,fontWeight:"500"}}>{s.v}</div>
+                      <div style={{fontFamily:"DM Mono,monospace",fontSize:"6px",color:"var(--dim)",letterSpacing:"1px",marginTop:"1px"}}>{s.l}</div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="calc-out">
-              <div style={{fontFamily:"DM Mono",fontSize:"7px",letterSpacing:"3px",color:"var(--gold)",textTransform:"uppercase",marginBottom:"12px"}}>Converted Profiles</div>
-              <div style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:"4px",padding:"12px",marginBottom:"12px"}}>
-                <div style={{fontFamily:"DM Mono",fontSize:"7px",color:"var(--dim)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:"8px"}}>Base — conneX12e / 800W</div>
-                <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
-                  {[{l:"Temp",v:`${cTemp}°C`,c:"#e06030"},{l:"Time",v:baseTime,c:"var(--green)"},{l:"Fan",v:`${cFan}%`,c:"var(--gold)"},{l:"MW",v:`${cMW}%`,c:"var(--blue)"}].map(s=>(
-                    <div key={s.l} style={{background:"#111008",borderRadius:"3px",padding:"7px 10px",textAlign:"center"}}>
-                      <div style={{fontFamily:"DM Mono",fontSize:"13px",color:s.c,fontWeight:"500"}}>{s.v}</div>
-                      <div style={{fontFamily:"DM Mono",fontSize:"7px",color:"var(--dim)",letterSpacing:"1px",textTransform:"uppercase",marginTop:"2px"}}>{s.l}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {["sp","hp","c16"].map(key=>{
-                const m=MODELS[key];
-                const res=convertProfile(cMW,baseTime,key);
-                const mwChg=res.mw!==cMW, tChg=res.time!==baseTime;
-                return <div key={key} className="res-card" style={{"--rc":m.color}}>
-                  <div className="res-hd">
-                    <div><div className="res-md">{m.label}</div><div className="res-sub">{m.mw}W MW · {m.total}kW total · {m.cavity}"×{m.cavity}" cavity</div></div>
-                    <div className="res-bd">{key.toUpperCase()}</div>
-                  </div>
-                  <div className="res-body">
-                    {[{ic:"🌡️",lb:"Temp",vl:`${cTemp}°C`,chg:false},{ic:"⏱️",lb:"Time",vl:res.time,old:baseTime,chg:tChg},{ic:"💨",lb:"Fan",vl:`${cFan}%`,chg:false},{ic:"📡",lb:"MW",vl:`${res.mw}%`,old:`${cMW}%`,chg:mwChg}].map(row=>(
-                      <div className="res-row" key={row.lb}>
-                        <span className="res-lb"><span style={{fontSize:"12px"}}>{row.ic}</span>{row.lb}</span>
-                        <span style={{display:"flex",alignItems:"center",gap:"4px"}}>
-                          {row.chg&&<span className="res-old">{row.old}</span>}
-                          <span className="res-vl" style={{color:row.chg?m.color:"var(--dim)"}}>{row.vl}</span>
-                          {!row.chg&&<span style={{fontFamily:"DM Mono",fontSize:"7px",color:"#2a2a20",letterSpacing:"1px"}}>unchanged</span>}
-                        </span>
-                      </div>
-                    ))}
-                    {cMW>0&&<div className="wt">✓ {res.watts}W delivered — same result as base model</div>}
-                  </div>
-                </div>;
-              })}
-              <div style={{fontFamily:"DM Mono",fontSize:"7px",color:"var(--dim)",letterSpacing:"1px",marginTop:"10px",lineHeight:"1.6"}}>Formula: New MW% = (Base MW% × 800W) ÷ Target MW · Fan and Temp unchanged · Time adjusted for conneX16 short cooks only</div>
 
-              {/* CALCULATOR FINE PRINT */}
+            {/* RIGHT — OUTPUT */}
+            <div style={{padding:"22px"}}>
+              <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"3px",color:"var(--gold)",textTransform:"uppercase",marginBottom:"12px"}}>③ Converted Profiles — Live</div>
+
+              {Object.entries(MODELS).filter(([k])=>k!==baseModel).map(([key,m])=>{
+                const baseTime=`${String(cTM).padStart(2,"0")}:${String(cTS).padStart(2,"0")}`;
+                const res=convertProfile(cMW,baseTime,baseModel,key);
+                const mwChg=res.mw!==cMW;
+                const timeChg=res.time!==baseTime;
+
+                return(
+                  <div key={key} style={{background:"#0f0e0b",border:`2px solid ${m.color}`,borderRadius:"4px",marginBottom:"10px",overflow:"hidden"}}>
+                    <div style={{padding:"10px 14px",borderBottom:"1px solid #1a1814",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"6px"}}>
+                      <div>
+                        <div style={{fontFamily:"Playfair Display,serif",fontSize:"14px",fontWeight:"700",color:"var(--text)",marginBottom:"2px"}}>{m.label}</div>
+                        <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020"}}>{m.mw}W MW · {m.total}kW total · {m.cavity}"×{m.cavity}" cavity</div>
+                      </div>
+                      <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                        {(mwChg||timeChg)&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:m.color,letterSpacing:"1px",padding:"2px 6px",border:`1px solid ${m.color}`,borderRadius:"2px"}}>ADJUSTED</div>}
+                        {!mwChg&&!timeChg&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020",letterSpacing:"1px",padding:"2px 6px",border:"1px solid #2a2820",borderRadius:"2px"}}>SAME PROFILE</div>}
+                        <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",padding:"2px 7px",borderRadius:"2px",color:m.color,border:`1px solid ${m.color}`}}>{key.toUpperCase()}</div>
+                      </div>
+                    </div>
+                    <div style={{padding:"10px 14px"}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"6px",marginBottom:"8px"}}>
+                        {[
+                          {ic:"🌡️",lb:"Temp",vl:`${cTemp}°C`,chg:false,old:""},
+                          {ic:"⏱️",lb:"Time",vl:res.time,chg:timeChg,old:baseTime},
+                          {ic:"💨",lb:"Fan",vl:`${cFan}%`,chg:false,old:""},
+                          {ic:"📡",lb:"MW",vl:`${res.mw}%`,chg:mwChg,old:`${cMW}%`},
+                        ].map(row=>(
+                          <div key={row.lb} style={{background:"#111008",borderRadius:"3px",padding:"7px 8px",textAlign:"center",border:row.chg?`1px solid ${m.color}40`:"1px solid #1a1814"}}>
+                            <div style={{fontSize:"12px",marginBottom:"2px"}}>{row.ic}</div>
+                            {row.chg&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#2a2820",textDecoration:"line-through",marginBottom:"1px"}}>{row.old}</div>}
+                            <div style={{fontFamily:"DM Mono,monospace",fontSize:"12px",fontWeight:"500",color:row.chg?m.color:"var(--dim)"}}>{row.vl}</div>
+                            <div style={{fontFamily:"DM Mono,monospace",fontSize:"6px",color:"#2a2820",letterSpacing:"1px",marginTop:"1px"}}>{row.lb}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"6px"}}>
+                        {cMW>0&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"1px",padding:"3px 8px",borderRadius:"2px",background:"#0a1a10",color:"var(--green)",border:"1px solid #153025"}}>✓ {res.watts}W delivered — same energy as source</div>}
+                        {cMW===0&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"8px",letterSpacing:"1px",padding:"3px 8px",borderRadius:"2px",background:"#0a1020",color:"var(--blue)",border:"1px solid #1a3050"}}>Zero MW — profile identical across all models</div>}
+                        {(mwChg||timeChg)&&<div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",color:"#3a3020"}}>Temp + Fan unchanged</div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Science note */}
+              <div style={{background:"#0a0908",border:"1px solid #1a1814",borderRadius:"4px",padding:"10px 12px",marginTop:"4px"}}>
+                <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"2px",color:"#3a3020",textTransform:"uppercase",marginBottom:"5px"}}>How the Calculation Works</div>
+                <p style={{fontSize:"9px",color:"#3a3020",lineHeight:"1.65"}}>MW% is recalculated so that the same number of watts reaches the food. Formula: New MW% = (Source MW% × Source model watts) ÷ Target model watts. Temperature and Fan are unchanged — they control impingement and surface colour, which is independent of magnetron power. Time is adjusted only for cavity size differences between conneX12 and conneX16 models on short cooks.</p>
+              </div>
+
+              {/* Disclaimer */}
               <div style={{marginTop:"18px",padding:"14px 16px",background:"#0a0908",border:"1px solid #1e1c17",borderRadius:"4px"}}>
                 <div style={{fontFamily:"DM Mono,monospace",fontSize:"7px",letterSpacing:"3px",color:"#3a3020",textTransform:"uppercase",marginBottom:"8px"}}>Pricing & Figures Disclaimer</div>
-                <p style={{fontSize:"10px",color:"#3a3020",lineHeight:"1.7",marginBottom:"6px"}}>All equipment prices, installation costs and operational figures referenced in this book are <strong style={{color:"#4a4030"}}>indicative estimates only</strong>, based on publicly available market information at the time of writing (2026). They are provided solely as illustrative examples to support the systems thinking and financial modelling frameworks described in Part IV.</p>
-                <p style={{fontSize:"10px",color:"#3a3020",lineHeight:"1.7",marginBottom:"6px"}}>Actual prices will vary and are subject to change without notice due to: <strong style={{color:"#4a4030"}}>currency fluctuation</strong> across APAC markets · <strong style={{color:"#4a4030"}}>import tariffs and duties</strong> by country · <strong style={{color:"#4a4030"}}>distributor margin variation</strong> · <strong style={{color:"#4a4030"}}>supply chain conditions</strong> · <strong style={{color:"#4a4030"}}>inflationary pressure</strong> · <strong style={{color:"#4a4030"}}>local regulatory compliance costs</strong>.</p>
-                <p style={{fontSize:"10px",color:"#3a3020",lineHeight:"1.7",marginBottom:"8px"}}>This book is a <strong style={{color:"#4a4030"}}>thinking framework</strong>, not a price list. No purchasing decision should be made based solely on figures appearing in this publication.</p>
-                <div style={{borderTop:"1px solid #1e1c17",paddingTop:"8px"}}>
-                  <p style={{fontSize:"10px",color:"#c97c2a",lineHeight:"1.6"}}>For current, market-specific pricing: contact your authorised distributor or regional equipment specialist directly.</p>
-                </div>
+                <p style={{fontSize:"10px",color:"#3a3020",lineHeight:"1.7",marginBottom:"6px"}}>All equipment prices, installation costs and operational figures referenced in this book are <strong style={{color:"#4a4030"}}>indicative estimates only</strong>, based on publicly available market information at time of writing (2026). Actual prices vary due to currency fluctuation · import tariffs · distributor margin · supply chain conditions · inflationary pressure · local compliance costs.</p>
+                <p style={{fontSize:"10px",color:"#3a3020",lineHeight:"1.7"}}><strong style={{color:"#c97c2a"}}>For current market pricing:</strong> contact your authorised distributor or regional equipment specialist directly. This book is a thinking framework, not a price list.</p>
               </div>
             </div>
           </div>
