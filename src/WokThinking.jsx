@@ -803,6 +803,9 @@ export default function WokThinking() {
   const [cTM, setCTM] = useState("01");
   const [baseModel, setBaseModel] = useState("base");
   const [lang, setLang] = useState("en");
+  const [tStore, setTStore] = useState({});   // {lang_ch: {orig: translated}}
+  const [tError, setTError] = useState("");
+  const [tVersion, setTVersion] = useState(0); // force re-apply after fetch
   const [translating, setTranslating] = useState(false);
   const [translations, setTranslations] = useState({});
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -1006,9 +1009,7 @@ ${numbered}`;
   }, [ch, lang, tStore, tVersion]);
 
   // Core translate hook — translates a string, caches result
-  const [tStore, setTStore] = useState({});   // {lang_ch: {orig: translated}}
-  const [tError, setTError] = useState("");
-  const [tVersion, setTVersion] = useState(0); // force re-apply after fetch
+
 
 
 
