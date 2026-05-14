@@ -863,17 +863,26 @@ export default function WokThinking() {
 
   const currentLang = LANGUAGES.find(l=>l.code===lang)||LANGUAGES[0];
 
-  // DOM-level translation: translate all visible text nodes after render
+  // Google Translate direct API - no backend needed
+  const GT_LANGS = {"zh-CN":"zh-CN","zh-TW":"zh-TW","ms":"ms","th":"th","vi":"vi","ko":"ko","ja":"ja","fil":"tl"};
+
+  const gtTranslate = async (text, targetLang) => {
+    const tl = GT_LANGS[targetLang] || targetLang;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      return data[0]?.map(c => c[0]).join('') || text;
+    } catch(e) { return text; }
+  };
+
   const applyDOMTranslation = (langCode, pageKey) => {
     if(langCode === "en") return;
     const storeKey = `${langCode}_${pageKey}`;
     const pageMap = tStore[storeKey];
     if(!pageMap) return;
-
-    // Walk all text nodes in active page
     const pageEl = document.querySelector('.pg.on');
     if(!pageEl) return;
-
     const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         const txt = node.textContent.trim();
@@ -891,23 +900,21 @@ export default function WokThinking() {
     });
   };
 
-  // Fetch translation for entire page
   const translatePage = async (targetLang) => {
     if(targetLang === "en") { setLang("en"); setShowLangMenu(false); return; }
     setShowLangMenu(false);
     setLang(targetLang);
     const storeKey = `${targetLang}_${ch}`;
-    if(tStore[storeKey]) return; // already translated
+    if(tStore[storeKey]) return;
 
     setTranslating(true);
     setTError("");
 
-    // Wait for render then collect text
     await new Promise(r => setTimeout(r, 150));
     const pageEl = document.querySelector('.pg.on');
     if(!pageEl) { setTranslating(false); return; }
 
-    // Collect unique meaningful text strings
+    // Collect unique text strings
     const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         const txt = node.textContent.trim();
@@ -917,86 +924,50 @@ export default function WokThinking() {
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-
     const seen = new Set();
     const texts = [];
     while(walker.nextNode()) {
       const txt = walker.currentNode.textContent.trim();
-      if(!seen.has(txt) && txt.length >= 4) {
-        seen.add(txt);
-        texts.push(txt);
-      }
+      if(!seen.has(txt)) { seen.add(txt); texts.push(txt); }
     }
 
-    if(texts.length === 0) { setTranslating(false); return; }
+    if(!texts.length) { setTranslating(false); return; }
 
-    const preserveList = [
-      "Merrychef","conneX12e","conneX12 SP","conneX12 HP","conneX16",
-      "Maillard","impingement","magnetron","pyrolysis","HACCP","FIFO",
-      "Char Siu","Laksa","Hokkien Mee","Gyoza","Bulgogi","Naan",
-      "KitchenConnect","JMUN-IP-001-2026","NAFEM","CFSP","SCAMPER",
-      "Daniel Theyagu","Jimmy Mun","Fan 100%","MW 0%","MW 100%"
-    ].join(", ");
+    // Preserve technical terms by temporarily replacing them
+    const PRESERVE = ["Merrychef","conneX12e","conneX12 SP","conneX12 HP","conneX16",
+      "Maillard","impingement","magnetron","HACCP","FIFO","KitchenConnect",
+      "JMUN-IP-001-2026","NAFEM","CFSP","SCAMPER","Daniel Theyagu","Jimmy Mun"];
 
-    const langName = LANGUAGES.find(l=>l.code===targetLang)?.label || targetLang;
-
-    // Split into batches of 30 to stay within token limits
-    const BATCH = 30;
-    const pageMap = {};
-
-    for(let b = 0; b < texts.length; b += BATCH) {
-      const batch = texts.slice(b, b + BATCH);
-      const numbered = batch.map((t,i)=>`[${b+i+1}] ${t}`).join("\n");
-
-      const prompt = `Translate each numbered item from English to ${langName}.
-
-CRITICAL RULES:
-1. Keep these terms exactly in English: ${preserveList}
-2. Keep all °C, % values, time formats (MM:SS) exactly as written
-3. Keep numbers, codes, model names exactly as written
-4. Return ONLY numbered translations in this exact format:
-[1] translation here
-[2] translation here
-No other text.
-
-Items:
-${numbered}`;
-
-      try {
-        const response = await fetch("/api/translate", {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ prompt })
+    try {
+      const pageMap = {};
+      // Translate in chunks of 10 strings joined by |||
+      const CHUNK = 10;
+      for(let i = 0; i < texts.length; i += CHUNK) {
+        const chunk = texts.slice(i, i + CHUNK);
+        const joined = chunk.join(" ||| ");
+        const translated = await gtTranslate(joined, targetLang);
+        const parts = translated.split(/\s*\|\|\|\s*/);
+        chunk.forEach((orig, j) => {
+          let tr = parts[j] || orig;
+          // Restore preserved terms if translation mangled them
+          PRESERVE.forEach(term => {
+            if(orig.includes(term) && !tr.includes(term)) {
+              tr = tr + ' (' + term + ')';
+            }
+          });
+          pageMap[orig] = tr;
         });
-
-        if(!response.ok) {
-          const errText = await response.text();
-          throw new Error(`API ${response.status}: ${errText.slice(0,100)}`);
-        }
-
-        const data = await response.json();
-        if(data.error) throw new Error(data.error.message || "API error");
-        const resultText = data.content?.[0]?.text || "";
-
-        batch.forEach((orig, i) => {
-          const idx = b + i + 1;
-          const match = resultText.match(new RegExp(`\\[${idx}\\]\\s*([^\\[]+)`));
-          if(match) pageMap[orig] = match[1].trim();
-        });
-      } catch(e) {
-        console.error("Batch translation error:", e);
-        setTError(e.message);
-        setTranslating(false);
-        return;
+        // Small delay between chunks to avoid rate limiting
+        if(i + CHUNK < texts.length) await new Promise(r => setTimeout(r, 100));
       }
+      setTStore(prev => ({...prev, [storeKey]: pageMap}));
+    } catch(e) {
+      setTError(e.message || "Translation failed");
     }
-
-    setTStore(prev => ({...prev, [storeKey]: pageMap}));
     setTranslating(false);
     setTVersion(v => v + 1);
   };
 
-  // Apply DOM translation after render / store update
   React.useEffect(() => {
     if(lang !== "en") {
       const storeKey = `${lang}_${ch}`;
